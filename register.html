@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Регистрация</title>
+<link rel="stylesheet" href="styles.css">
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="firebase-db.js"></script>
+</head>
+<body>
+<div class="form-page">
+    <div class="form-card">
+        <h1>Регистрация</h1>
+        <div class="form-group">
+            <label>ФИО</label>
+            <input type="text" id="fio" placeholder="Введите ФИО">
+        </div>
+        <div class="form-group">
+            <label>Номер читательского билета</label>
+            <input type="text" id="ticket" placeholder="Введите номер читательского билета">
+        </div>
+        <div class="form-group">
+            <label>Логин</label>
+            <input type="text" id="login" placeholder="Придумайте логин">
+        </div>
+        <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" id="password" placeholder="Придумайте пароль">
+        </div>
+        <div class="form-group">
+            <label>Роль</label>
+            <select id="role" style="padding: 10px 12px; border: 1px solid #bbb; border-radius: 4px; background: #f5f7fa; font-size: 14px; width: 100%;">
+                <option value="user">Читатель</option>
+                <option value="librarian">Библиотекарь</option>
+            </select>
+        </div>
+        <div id="error" style="color: red; margin-bottom: 10px; display: none;"></div>
+        <div class="form-buttons" style="flex-direction: column; gap: 12px;">
+            <button class="btn login-btn" onclick="register()">Зарегистрироваться</button>
+        </div>
+        <div style="margin-top: 16px; text-align: center;">
+            <a href="index.html" class="back">Назад</a>
+        </div>
+    </div>
+</div>
+<script>
+async function register() {
+    var fio = document.getElementById('fio').value;
+    var ticket = document.getElementById('ticket').value;
+    var login = document.getElementById('login').value;
+    var password = document.getElementById('password').value;
+    var role = document.getElementById('role').value;
+    var errDiv = document.getElementById('error');
+    if (fio === '' || ticket === '' || login === '' || password === '') {
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Заполните все поля';
+        return;
+    }
+
+    try {
+        await window.firebaseInitPromise;
+        if (!firebase.auth().currentUser) return;
+
+        const checkUser = await getUsersRef().doc(login).get();
+        if (checkUser.exists) {
+            errDiv.style.display = 'block';
+            errDiv.textContent = 'Такой логин уже занят';
+            return;
+        }
+        var newU = {
+            fio: fio,
+            ticket: ticket,
+            login: login,
+            password: password,
+            role: role,
+            fine: '0 руб',
+            taken: [],
+            history: []
+        };
+        await getUsersRef().doc(login).set(newU);
+        localStorage.setItem('currentUser', JSON.stringify(newU));
+        window.location.href = 'profile.html';
+    } catch (e) {
+        console.error(e);
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Ошибка сохранения в базу данных';
+    }
+}
+</script>
+</body>
+</html>

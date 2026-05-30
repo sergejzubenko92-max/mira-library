@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Книги</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="firebase-db.js"></script>
+</head>
+<body>
+<div class="books-page">
+    <a href="index.html" class="back">Назад</a>
+    <h1>Книги</h1>
+    <div class="books-bar">
+        <input type="text" id="search-input" class="search-input" placeholder="Поиск по названию, автору или жанру..." oninput="filterBooks()">
+        <button id="btn-add" class="btn-add" style="display:none;" onclick="addBook()">+ Добавить книгу</button>
+    </div>    
+    <div id="add-book-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#cfe0ec; padding:30px; border-radius:12px; width:400px; max-width:90%; box-shadow:0 4px 15px rgba(0,0,0,0.2);">
+            <h3 style="margin-top:0; color:#2f2f2f;">Добавить книгу</h3>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <input type="text" id="add-author" placeholder="Автор" class="search-input" style="width:100%; box-sizing:border-box;">
+                <input type="text" id="add-title" placeholder="Название" class="search-input" style="width:100%; box-sizing:border-box;">
+                <input type="text" id="add-genre" placeholder="Жанр" class="search-input" style="width:100%; box-sizing:border-box;">
+                <input type="number" id="add-count" placeholder="Количество" class="search-input" style="width:100%; box-sizing:border-box;">
+                <div id="add-book-msg" style="display:none; font-size:14px;"></div>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="btn" style="flex:1;" onclick="submitAddBook()">Добавить</button>
+                    <button class="btn" style="flex:1; background:#555;" onclick="closeAddModal()">Отмена</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="books-box">
+        <div class="table-scroll books-scroll">
+            <table id="books-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Автор</th>
+                        <th>Название</th>
+                        <th>Жанр</th>
+                        <th>В наличии</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody id="books-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+var localBooks = [];
+var currentUser = JSON.parse(localStorage.getItem('currentUser'));
+if (currentUser && currentUser.role === 'librarian') {
+    document.getElementById('btn-add').style.display = 'block';
+}
+async function loadBooks() {
+    try {
+        await window.firebaseInitPromise;
+        if (!firebase.auth().currentUser) return;
+
+        const snapshot = await getBooksRef().get();
+        localBooks = [];
+        var docs = snapshot.docs;
+        for (var i = 0; i < docs.length; i++) {
+            var doc = docs[i];
+            const d = doc.data();
+            localBooks.push([d.id, d.author, d.title, d.genre, d.available, d.status]);
+        }        
+        localBooks.sort(function(a, b) {
+            return a[0] - b[0];
+        });
+        renderBooksTable();
+    } catch (e) {
+        console.error("Ошибка при получении списка книг:", e);
+    }
+}
+function renderBooksTable() {
+    var tbody = document.getElementById('books-tbody');
+    tbody.innerHTML = '';
+    for (var i = 0; i < localBooks.length; i++) {
+        var tr = document.createElement('tr');
+        tr.className = 'book-row';
+        tr.innerHTML = '<td>' + localBooks[i][0] + '</td>' +
+                       '<td>' + localBooks[i][1] + '</td>' +
+                       '<td>' + localBooks[i][2] + '</td>' +
+                       '<td>' + localBooks[i][3] + '</td>' +
+                       '<td>' + localBooks[i][4] + '</td>' +
+                       '<td>' + localBooks[i][5] + '</td>';
+        tbody.appendChild(tr);
+    }
+}
+function filterBooks() {
+    var q = document.getElementById('search-input').value.toLowerCase();
+    var rows = document.querySelectorAll('#books-tbody tr.book-row');
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var a = row.cells[1].textContent.toLowerCase();
+        var t = row.cells[2].textContent.toLowerCase();
+        var g = row.cells[3].textContent.toLowerCase();
+        if (a.includes(q) || t.includes(q) || g.includes(q)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    }
+}
+async function addBook() {
+    document.getElementById('add-book-modal').style.display = 'flex';
+    document.getElementById('add-author').value = '';
+    document.getElementById('add-title').value = '';
+    document.getElementById('add-genre').value = '';
+    document.getElementById('add-count').value = '';
+    document.getElementById('add-book-msg').style.display = 'none';
+}
+function closeAddModal() {
+    document.getElementById('add-book-modal').style.display = 'none';
+}
+async function submitAddBook() {
+    var author = document.getElementById('add-author').value.trim();
+    var title = document.getElementById('add-title').value.trim();
+    var genre = document.getElementById('add-genre').value.trim();
+    var count = parseInt(document.getElementById('add-count').value);
+    var msg = document.getElementById('add-book-msg');
+    if (!author || !title || !genre || isNaN(count)) {
+        msg.style.display = 'block';
+        msg.style.color = 'red';
+        msg.textContent = 'Заполните все поля корректно';
+        return;
+    }
+    var status = '';
+    if (count > 0) {
+        status = 'Доступна';
+    } else {
+        status = 'Нет в наличии';
+    }
+    var nextId = 1;
+    if (localBooks.length > 0) {
+        var maxId = localBooks[0][0];
+        for (var i = 0; i < localBooks.length; i++) {
+            if (localBooks[i][0] > maxId) {
+                maxId = localBooks[i][0];
+            }
+        }
+        nextId = maxId + 1;
+    }
+    const newBook = {
+        id: nextId,
+        author: author,
+        title: title,
+        genre: genre,
+        available: count,
+        total: count,
+        status: status
+    };
+    try {
+        await getBooksRef().doc(nextId.toString()).set(newBook);
+        msg.style.display = 'block';
+        msg.style.color = 'green';
+        msg.textContent = 'Книга успешно добавлена!';
+        setTimeout(function() {
+            closeAddModal();
+            loadBooks();
+        }, 1000);
+    } catch (e) {
+        console.error("Ошибка добавления книги:", e);
+        msg.style.display = 'block';
+        msg.style.color = 'red';
+        msg.textContent = 'Ошибка при добавлении книги';
+    }
+}
+loadBooks();
+</script>
+</body>
+</html>

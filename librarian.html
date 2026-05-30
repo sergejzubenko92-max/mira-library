@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Пользователи</title>
+    <link rel="stylesheet" href="styles.css">   
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="firebase-db.js"></script>
+</head>
+<body>
+<div class="profile">
+    <a href="profile.html" class="back">Назад</a>
+    <h1>Пользователи</h1>
+    <ul class="user-list" id="user-list"></ul>
+</div>
+<script>
+var localUser = JSON.parse(localStorage.getItem('currentUser'));
+if (localUser == null || localUser.role !== 'librarian') {
+    window.location.href = 'index.html';
+}
+async function loadUsers() {
+    var list = document.getElementById('user-list');
+    list.innerHTML = 'Загрузка списка из облака...';
+    try {
+        await window.firebaseInitPromise;
+        const snapshot = await getUsersRef().get();
+        list.innerHTML = '';
+
+        var docs = snapshot.docs;
+        for (var i = 0; i < docs.length; i++) {
+            var doc = docs[i];
+            const u = doc.data();
+            if (u.role !== 'librarian') {
+                var li = document.createElement('li');
+                li.innerHTML = '<a href="user-profile.html?login=' + u.login + '">' + u.fio + ' — билет № ' + u.ticket + '</a>';
+                list.appendChild(li);
+            }
+        }
+    } catch (e) {
+        console.error("Ошибка при получении списка пользователей:", e);
+        list.innerHTML = 'Ошибка соединения.';
+    }
+}
+loadUsers();
+</script>
+</body>
+</html>

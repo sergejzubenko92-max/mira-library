@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Профиль пользователя</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="firebase-db.js"></script>
+</head>
+<body>
+<div class="profile">
+    <a href="librarian.html" class="back">← К списку пользователей</a>
+    <h1>Профиль</h1>
+    <div class="top">
+        <div class="info">
+            <p id="fio">ФИО: —</p>
+            <p id="ticket">Номер читательского билета: —</p>
+            <p id="fine">Штраф: —</p>
+        </div>
+        <div class="box">
+            <h3>Рекомендованы к прочтению...</h3>
+            <div class="table-scroll">
+                <table id="rec-table">
+                    <tr>
+                        <th>Автор</th>
+                        <th>Книга</th>
+                        <th>Жанр</th>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="bottom">
+        <div class="box">
+            <h3>Взятые книги</h3>
+            <div class="table-scroll">
+                <table id="table-taken">
+                    <thead>
+                        <tr>
+                            <th>Срок</th>
+                            <th>Дата взятия</th>
+                            <th>Срок возврата</th>
+                            <th>Название книги</th>
+                            <th>Статус</th>
+                            <th>Действие</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taken-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="box">
+            <h3>История пользователя</h3>
+            <div class="table-scroll">
+                <table id="table-history">
+                    <tr>
+                        <th>Тип</th>
+                        <th>Дата</th>
+                        <th>Книга</th>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+var params = new URLSearchParams(window.location.search);
+var login = params.get('login');
+
+function parseDate(str) {
+    if (!str) return new Date();
+    var parts = str.split('.');
+    if (parts.length === 3) {
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+    return new Date();
+}
+function getDueDate(takenDateStr, daysStr) {
+    var takenDate = parseDate(takenDateStr);
+    var days = parseInt(daysStr) || 0;
+    var dueDate = new Date(takenDate.getTime());
+    dueDate.setDate(dueDate.getDate() + days);
+    return dueDate;
+}
+
+function formatDate(date) {
+    var d = date.getDate();
+    var m = date.getMonth() + 1;
+    var y = date.getFullYear();
+    if (d < 10) d = '0' + d;
+    if (m < 10) m = '0'+ m;
+    return d + '.' + m + '.' + y;
+}
+async function loadProfile() {
+    try {
+        await window.firebaseInitPromise;
+        const userDoc = await getUsersRef().doc(login).get();
+        if (userDoc.exists) {
+            const found = userDoc.data();
+            document.getElementById('fio').textContent = 'ФИО: ' + found.fio;
+            document.getElementById('ticket').textContent = 'Номер читательского билета: ' + found.ticket;
+            document.getElementById('fine').textContent = 'Штраф: ' + found.fine;
+            var taken = found.taken || [];
+            var tbodyTaken = document.getElementById('taken-tbody');
+            tbodyTaken.innerHTML = '';
+            for (var i = 0; i < taken.length; i++) {
+                var item = taken[i];
+                var index = i;
+                var tr = document.createElement('tr');               
+                var dueDate = getDueDate(item.date, item.days);
+                var dueDateStr = formatDate(dueDate);                
+                var today = new Date();
+                today.setHours(0,0,0,0);
+                var checkDueDate = new Date(dueDate.getTime());
+                checkDueDate.setHours(0,0,0,0);               
+                var statusHtml = '';
+                var isOverdue = today > checkDueDate;
+                if (isOverdue) {
+                    var diffTime = Math.abs(today - checkDueDate);
+                    var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    statusHtml = '<span style="color: #842029; font-weight: bold; background: #f8d7da; padding: 2px 6px; border-radius: 4px;">Просрочено на ' + diffDays + ' дн.</span>';
+                } else {
+                    statusHtml = '<span style="color: #1a6b1a; background: #c8f0c8; padding: 2px 6px; border-radius: 4px;">В срок</span>';
+                }
+                tr.innerHTML = '<td>' + item.days + '</td>' +
+                               '<td>' + item.date + '</td>' +
+                               '<td>' + dueDateStr + '</td>' +
+                               '<td>' + item.book + '</td>' +
+                               '<td>' + statusHtml + '</td>' +
+                               '<td><button style="padding: 6px 10px; background-color: #2f2f2f; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; transition: background 0.2s;" onmouseover="this.style.backgroundColor=\'#444\'" onmouseout="this.style.backgroundColor=\'#2f2f2f\'" onclick="returnBook(\'' + item.book + '\', ' + index + ', ' + isOverdue + ')">Книга возвращена</button></td>';
+                tbodyTaken.appendChild(tr);
+            }
+            var history = found.history || [];
+            var tableHistory = document.getElementById('table-history');
+            tableHistory.innerHTML = '<tr><th>Тип</th><th>Дата</th><th>Книга</th></tr>';
+            for (var j = 0; j < history.length; j++) {
+                var historyItem = history[j];
+                var historyTr = document.createElement('tr');
+                historyTr.innerHTML = '<td>' + historyItem.type + '</td><td>' + historyItem.date + '</td><td>' + historyItem.book + '</td>';
+                tableHistory.appendChild(historyTr);
+            }
+            const booksSnap = await getBooksRef().get();
+            const booksList = [];
+            var bookDocs = booksSnap.docs;
+            for (var booksIndex = 0; booksIndex < bookDocs.length; booksIndex++) {
+                booksList.push(bookDocs[booksIndex].data());
+            }
+            const genreCounts = {};
+            for (var n = 0; n < history.length; n++) {
+                var h = history[n];
+                var bk = null;
+                for (var p = 0; p < booksList.length; p++) {
+                    if (booksList[p].title === h.book) {
+                        bk = booksList[p];
+                        break;
+                    }
+                }
+                if (bk) {
+                    genreCounts[bk.genre] = (genreCounts[bk.genre] || 0) + 1;
+                }
+            }
+            let favGenre = 'Классика';
+            let max = 0;
+            var genres = Object.keys(genreCounts);
+            for (var q = 0; q < genres.length; q++) {
+                var g = genres[q];
+                if (genreCounts[g] > max) {
+                    max = genreCounts[g];
+                    favGenre = g;
+                }
+            }
+            const recs = [];
+            for (var rIndex = 0; rIndex < booksList.length; rIndex++) {
+                if (booksList[rIndex].genre === favGenre && booksList[rIndex].available > 0) {
+                    if (recs.length < 3) {
+                        recs.push(booksList[rIndex]);
+                    }
+                }
+            }
+            const recTable = document.getElementById('rec-table');
+            recTable.innerHTML = '<tr><th>Автор</th><th>Книга</th><th>Жанр</th></tr>';
+            for (var recIndex = 0; recIndex < recs.length; recIndex++) {
+                var r = recs[recIndex];
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td>' + r.author + '</td><td>' + r.title + '</td><td>' + r.genre + '</td>';
+                recTable.appendChild(tr);
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+async function returnBook(bookName, index, isOverdue) {
+    if (!confirm('Вы действительно хотите оформить возврат книги «' + bookName + '»?')) {
+        return;
+    }
+    try {
+        await window.firebaseInitPromise;
+        const userDoc = await getUsersRef().doc(login).get();
+        if (!userDoc.exists) {
+            alert('Пользователь не найден');
+            return;
+        }
+        let userData = userDoc.data();
+        let taken = userData.taken || [];
+        let history = userData.history || [];
+        if (index >= 0 && index < taken.length) {
+            taken.splice(index, 1);
+        } else {
+            var itemIndex = -1;
+            for (var i = 0; i < taken.length; i++) {
+                if (taken[i].book === bookName) {
+                    itemIndex = i;
+                    break;
+                }
+            }
+            if (itemIndex > -1) taken.splice(itemIndex, 1);
+        }
+
+        var today = new Date();
+        var d = today.getDate();
+        var m = today.getMonth() + 1;
+        var y = today.getFullYear();
+        if (d < 10) d = '0' + d;
+        if (m < 10) m = '0' + m;
+        var dateStr = d + '.' + m + '.' + y;
+        history.push({ type: 'Вернул', date: dateStr, book: bookName });
+        await getUsersRef().doc(login).update({
+            taken: taken,
+            history: history
+        });
+        const bookSnap = await getBooksRef().where('title', '==', bookName).get();
+        if (!bookSnap.empty) {
+            let bookDoc = bookSnap.docs[0];
+            let bookData = bookDoc.data();
+            let newAvailable = (bookData.available || 0) + 1;
+            let newTotal = bookData.total || newAvailable;
+            if (newAvailable > newTotal) newTotal = newAvailable;
+
+            await getBooksRef().doc(bookDoc.id).update({
+                available: newAvailable,
+                total: newTotal,
+                status: 'Доступна'
+            });
+        }
+        const historySnap = await getHistoryRef().get();
+        const nextLogId = (historySnap.size +1).toString();
+        await getHistoryRef().doc(nextLogId).set({
+            ticket: userData.ticket,
+            name: userData.fio,
+            book: bookName,
+            type: 'Вернул',
+            date: dateStr,
+            isOverdue: isOverdue
+        });
+        alert('Книга «' + bookName + '» успешно возвращена!');
+        loadProfile();
+    } catch (e) {
+        console.error("Ошибка при возврате книги:", e);
+        alert("Произошла ошибка при возврате книги.");
+    }
+}
+loadProfile();
+</script>
+</body>
+</html>

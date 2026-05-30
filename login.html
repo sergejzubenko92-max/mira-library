@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Вход</title>
+<link rel="stylesheet" href="styles.css">
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="firebase-db.js"></script>
+</head>
+<body>
+<div class="form-page">
+    <div class="form-card">
+        <h1>Вход</h1>
+        <div class="form-group">
+            <label>Логин</label>
+            <input type="text" id="login" placeholder="Введите логин">
+        </div>
+        <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" id="password" placeholder="Введите пароль">
+        </div>
+        <div id="error" style="color: red; margin-bottom: 10px; display: none;"></div>
+        <div class="form-buttons" style="flex-direction: column; gap: 12px;">
+            <button class="btn login-btn" onclick="doLogin()">Войти</button>
+        </div>
+        <div style="margin-top: 16px; text-align: center;">
+            <a href="index.html" class="back">Назад</a>
+        </div>
+    </div>
+</div>
+<script>
+async function doLogin() {
+    var login = document.getElementById('login').value;
+    var password = document.getElementById('password').value;
+    var errDiv = document.getElementById('error');
+    if (login === '' || password === '') {
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Заполните все поля';
+        return;
+    }
+
+    errDiv.style.display = 'none';
+
+    try {
+        await window.firebaseInitPromise;
+        if (!firebase.auth().currentUser) return;
+        const userDoc = await getUsersRef().doc(login).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData.password === password) {
+                localStorage.setItem('currentUser', JSON.stringify(userData));
+                window.location.href = 'profile.html';
+                return;
+            }
+        }
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Неверный логин или пароль';
+    } catch (e) {
+        console.error(e);
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Ошибка доступа к базе данных';
+    }
+}
+</script>
+</body>
+</html>
