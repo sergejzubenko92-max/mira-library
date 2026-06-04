@@ -137,16 +137,7 @@ async function submitAddBook() {
     } else {
         status = 'Нет в наличии';
     }
-    var nextId = 1;
-    if (localBooks.length > 0) {
-        var maxId = localBooks[0][0];
-        for (var i = 0; i < localBooks.length; i++) {
-            if (localBooks[i][0] > maxId) {
-                maxId = localBooks[i][0];
-            }
-        }
-        nextId = maxId + 1;
-    }
+    var nextId = Math.floor(Date.now() / 1000);
     const newBook = {
         id: nextId,
         author: author,
@@ -161,6 +152,10 @@ async function submitAddBook() {
         msg.style.display = 'block';
         msg.style.color = 'green';
         msg.textContent = 'Книга успешно добавлена!';
+        document.getElementById('add-author').value = '';
+        document.getElementById('add-title').value = '';
+        document.getElementById('add-genre').value = '';
+        document.getElementById('add-count').value = '';
         setTimeout(function() {
             closeAddModal();
             loadBooks();
