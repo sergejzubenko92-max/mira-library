@@ -1,345 +1,67 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Профиль</title>
-    <link rel="stylesheet" href="styles.css">
-    
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-    <script src="firebase-db.js"></script>
+<meta charset="UTF-8">
+<title>Вход</title>
+<link rel="stylesheet" href="styles.css">
+
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="firebase-db.js"></script>
 </head>
 <body>
-<div class="profile">
-    <a href="index.html" class="back">Назад</a>
-    <button class="btn" id="logout-btn" onclick="logout()" style="position:absolute; top:20px; right:20px;">Выйти из аккаунта</button>
-
-    <h1>Профиль</h1>
-    <div class="top">
-        <div class="info">
-            <p id="fio">ФИО: -</p>
-            <p id="ticket">Номер читательского билета: -</p>
-            <p id="role-text">Статус: —</p>
-            <p id="fine">Штраф: —</p>
+<div class="form-page">
+    <div class="form-card">
+        <h1>Вход</h1>
+        <div class="form-group">
+            <label>Логин</label>
+            <input type="text" id="login" placeholder="Введите логин">
         </div>
-        <div class="box" id="box-rec">
-            <h3>Рекомендованы к прочтению...</h3>
-            <div class="table-scroll">
-                <table id="rec-table">
-                    <tr>
-                        <th>Автор</th>
-                        <th>Книга</th>
-                        <th>Жанр</th>
-                    </tr>
-                </table>
-            </div>
+        <div class="form-group">
+            <label>Пароль</label>
+            <input type="password" id="password" placeholder="Введите пароль">
         </div>
-        <div class="box" id="box-issue" style="display:none;">
-            <h3>Выдать книгу читателю</h3>
-            <div class="issue-form" style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
-                <input type="text" id="issue-ticket" placeholder="Номер билета читателя" class="search-input" style="width:100%; box-sizing:border-box;">
-                <input type="text" id="issue-book" placeholder="Название книги" class="search-input" style="width:100%; box-sizing:border-box;">
-                <input type="number" id="issue-days" placeholder="Срок выдачи (дней)" class="search-input" style="width:100%; box-sizing:border-box;">
-                <button class="btn" style="width:100%;" onclick="issueBook()">Выдать</button>
-                <div id="issue-msg" style="display:none; font-size:14px; margin-top:4px;"></div>
-            </div>
+        <div id="error" style="color: red; margin-bottom: 10px; display: none;"></div>
+        <div class="form-buttons" style="flex-direction: column; gap: 12px;">
+            <button class="btn login-btn" onclick="doLogin()">Войти</button>
         </div>
-    </div>
-
-    <div class="bottom" id="user-tables-container">
-        <div class="box">
-            <h3>Взятые книги</h3>
-            <div class="table-scroll">
-                <table id="table-taken">
-                    <thead>
-                        <tr>
-                            <th>Срок</th>
-                            <th>Дата взятия</th>
-                            <th>Срок возврата</th>
-                            <th>Название книги</th>
-                            <th>Статус</th>
-                        </tr>
-                    </thead>
-                    <tbody id="taken-tbody"></tbody>
-                </table>
-            </div>
-        </div>
-        <div class="box">
-            <h3>История пользователя</h3>
-            <div class="table-scroll">
-                <table id="table-history">
-                    <tr>
-                        <th>Тип</th>
-                        <th>Дата</th>
-                        <th>Книга</th>
-                    </tr>
-                </table>
-            </div>
+        <div style="margin-top: 16px; text-align: center;">
+            <a href="index.html" class="back">Назад</a>
         </div>
     </div>
 </div>
 <script>
-function logout() {
-    localStorage.removeItem('currentUser');
-    window.location.href = 'login.html';
-}
-
-var user = JSON.parse(localStorage.getItem('currentUser'));
-if (user == null) {
-    window.location.href = 'login.html';
-}
-
-document.getElementById('fio').textContent = 'ФИО: ' + user.fio;
-document.getElementById('ticket').textContent = 'Номер читательского билета: ' + user.ticket;
-var roleName = '';
-if (user.role === 'librarian') {
-    roleName = 'Библиотекарь';
-} else {
-    roleName = 'Читатель';
-}
-document.getElementById('role-text').textContent = 'Статус: ' + roleName;
-document.getElementById('fine').textContent = 'Штраф: ' + user.fine;
-
-if (user.role === 'librarian') {
-    document.getElementById('box-issue').style.display = 'block';
-    document.getElementById('box-rec').style.display = 'none';
-    document.getElementById('user-tables-container').style.display = 'none';
-    var link = document.createElement('a');
-    link.href = 'librarian.html';
-    link.className = 'btn';
-    link.style.marginTop = '20px';
-    link.style.display = 'inline-block';
-    link.textContent = 'Список пользователей';
-    document.querySelector('.profile').appendChild(link);
-} else {
-    renderUserTables(user);
-    generateRecommendations(user);
-}
-
-function parseDate(str) {
-    if (!str) return new Date();
-    var parts = str.split('.');
-    if (parts.length !== 3) {
-        return new Date();
-    }
-    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-}
-
-function getDueDate(takenDateStr, daysStr) {
-    var takenDate = parseDate(takenDateStr);
-    var days = parseInt(daysStr) || 0;
-    var dueDate = new Date(takenDate.getTime());
-    dueDate.setDate(dueDate.getDate() + days);
-    return dueDate;
-}
-
-function formatDate(date) {
-    var d = date.getDate();
-    var m = date.getMonth() + 1;
-    var y = date.getFullYear();
-    if (d < 10) d = '0' + d;
-    if (m < 10) m = '0' + m;
-    return d + '.' + m + '.' + y;
-}
-
-function renderUserTables(u) {
-    var taken = u.taken || [];
-    var tbodyTaken = document.getElementById('taken-tbody');
-    tbodyTaken.innerHTML = '';
-
-    for (var i = 0; i < taken.length; i++) {
-        var item = taken[i];
-        var tr = document.createElement('tr');
-        var dueDate = getDueDate(item.date, item.days);
-        var dueDateStr = formatDate(dueDate);
-        
-        var today = new Date();
-        today.setHours(0,0,0,0);
-        var checkDueDate = new Date(dueDate.getTime());
-        checkDueDate.setHours(0,0,0,0);
-        
-        var statusHtml = '';
-        if (today > checkDueDate) {
-            var diffTime = Math.abs(today - checkDueDate);
-            var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            statusHtml = '<span style="color: #842029; font-weight: bold; background: #f8d7da; padding: 2px 6px; border-radius: 4px;">Просрочено на ' + diffDays + ' дн.</span>';
-        } else {
-            statusHtml = '<span style="color: #1a6b1a; background: #c8f0c8; padding: 2px 6px; border-radius: 4px;">В срок</span>';
-        }
-
-        tr.innerHTML = '<td>' + item.days + '</td>' +
-                       '<td>' + item.date + '</td>' +
-                       '<td>' + dueDateStr + '</td>' +
-                       '<td>' + item.book + '</td>' +
-                       '<td>' + statusHtml + '</td>';
-        tbodyTaken.appendChild(tr);
-    }
-
-    var history = u.history || [];
-    var tableHistory = document.getElementById('table-history');
-    tableHistory.innerHTML = '<tr><th>Тип</th><th>Дата</th><th>Книга</th></tr>';
-    for (var j = 0; j < history.length; j++) {
-        var historyItem = history[j];
-        var historyTr = document.createElement('tr');
-        historyTr.innerHTML = '<td>' + historyItem.type + '</td><td>' + historyItem.date + '</td><td>' + historyItem.book + '</td>';
-        tableHistory.appendChild(historyTr);
-    }
-}
-
-async function generateRecommendations(u) {
-    await window.firebaseInitPromise;
-    const genreCounts = {};
-    const booksSnap = await getBooksRef().get();
-    const booksList = [];
-    var bookDocs = booksSnap.docs;
-    for (var booksIndex = 0; booksIndex < bookDocs.length; booksIndex++) {
-        booksList.push(bookDocs[booksIndex].data());
-    }
-
-    const userHistory = u.history || [];
-    for (var i = 0; i < userHistory.length; i++) {
-        var h = userHistory[i];
-        var bk = null;
-        for (var j = 0; j < booksList.length; j++) {
-            if (booksList[j].title === h.book) {
-                bk = booksList[j];
-                break;
-            }
-        }
-        if (bk) {
-            genreCounts[bk.genre] = (genreCounts[bk.genre] || 0) + 1;
-        }
-    }
-
-    let favGenre = 'Классика';
-    let max = 0;
-    var genres = Object.keys(genreCounts);
-    for (var k = 0; k < genres.length; k++) {
-        var g = genres[k];
-        if (genreCounts[g] > max) {
-            max = genreCounts[g];
-            favGenre = g;
-        }
-    }
-
-    const recs = [];
-    for (var n = 0; n < booksList.length; n++) {
-        if (booksList[n].genre === favGenre && booksList[n].available > 0) {
-            if (recs.length < 3) {
-                recs.push(booksList[n]);
-            }
-        }
-    }
-    const recTable = document.getElementById('rec-table');
-    for (var m = 0; m < recs.length; m++) {
-        var r = recs[m];
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td>' + r.author + '</td><td>' + r.title + '</td><td>' + r.genre + '</td>';
-        recTable.appendChild(tr);
-    }
-}
-
-async function issueBook() {
-    var ticket = document.getElementById('issue-ticket').value;
-    var bookName = document.getElementById('issue-book').value;
-    var days = document.getElementById('issue-days').value;
-    var msg = document.getElementById('issue-msg');
-
-    if (!ticket || !bookName || !days) {
-        msg.style.display = 'block';
-        msg.style.color = 'red';
-        msg.textContent = 'Заполните все поля формы';
+async function doLogin() {
+    var login = document.getElementById('login').value;
+    var password = document.getElementById('password').value;
+    var errDiv = document.getElementById('error');
+    if (login === '' || password === '') {
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Заполните все поля';
         return;
     }
 
+    errDiv.style.display = 'none';
+
     try {
         await window.firebaseInitPromise;
-
-        const userSnap = await getUsersRef().where('ticket', '==', ticket).get();
-        if (userSnap.empty) {
-            msg.style.display = 'block';
-            msg.style.color = 'red';
-            msg.textContent = 'Читатель с таким билетом не найден';
-            return;
+        if (!firebase.auth().currentUser) return;
+        const userDoc = await getUsersRef().doc(login).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData.password === password) {
+                localStorage.setItem('currentUser', JSON.stringify(userData));
+                window.location.href = 'profile.html';
+                return;
+            }
         }
-
-        let readerDoc = userSnap.docs[0];
-        let readerData = readerDoc.data();
-
-        const bookSnap = await getBooksRef().where('title', '==', bookName).get();
-        if (bookSnap.empty) {
-            msg.style.display = 'block';
-            msg.style.color = 'red';
-            msg.textContent = 'Книга с таким названием не найдена';
-            return;
-        }
-
-        let bookDoc = bookSnap.docs[0];
-        let bookData = bookDoc.data();
-
-        if (bookData.available <= 0) {
-            msg.style.display = 'block';
-            msg.style.color = 'red';
-            msg.textContent = 'Этой книги нет в наличии на полках';
-            return;
-        }
-
-        var newBookStatus = '';
-        if (bookData.available - 1 > 0) {
-            newBookStatus = 'Доступна';
-        } else {
-            newBookStatus = 'Нет в наличии';
-        }
-
-        await getBooksRef().doc(bookDoc.id).update({
-            available: bookData.available - 1,
-            status: newBookStatus
-        });
-
-        var today = new Date();
-        var d = today.getDate();
-        var m = today.getMonth() + 1;
-        var y = today.getFullYear();
-        if (d < 10) d = '0' + d;
-        if (m < 10) m = '0' + m;
-        var date = d + '.' + m + '.' + y;
-
-        if (!readerData.taken) readerData.taken = [];
-        if (!readerData.history) readerData.history = [];
-
-        readerData.taken.push({ days: days + ' дней', date: date, book: bookName });
-        readerData.history.push({ type: 'Взял', date: date, book: bookName });
-
-        await getUsersRef().doc(readerDoc.id).update({
-            taken: readerData.taken,
-            history: readerData.history
-        });
-
-        const historySnap = await getHistoryRef().get();
-        const nextLogId = (historySnap.size + 1).toString();
-        await getHistoryRef().doc(nextLogId).set({
-            ticket: ticket,
-            name: readerData.fio,
-            book: bookName,
-            type: 'Взял',
-            date: date,
-            isOverdue: false
-        });
-
-        msg.style.display = 'block';
-        msg.style.color = 'green';
-        msg.textContent = 'Книга «' + bookName + '» успешно выдана пользователю ' + readerData.fio + '!';
-        
-        document.getElementById('issue-ticket').value = '';
-        document.getElementById('issue-book').value = '';
-        document.getElementById('issue-days').value = '';
-
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Неверный логин или пароль';
     } catch (e) {
         console.error(e);
-        msg.style.display = 'block';
-        msg.style.color = 'red';
-        msg.textContent = 'Произошла непредвиденная ошибка';
+        errDiv.style.display = 'block';
+        errDiv.textContent = 'Ошибка доступа к базе данных';
     }
 }
 </script>
